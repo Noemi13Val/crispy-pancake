@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tijuana Route Planner</title>
+    <title>Tijuana Cherry Routes</title>
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -11,85 +11,137 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Playfair para títulos y Montserrat para cuerpo -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        #map { height: calc(100vh - 80px); width: 100%; z-index: 1; }
-        .custom-popup .leaflet-popup-content-wrapper {
-            border-radius: 12px;
-            padding: 5px;
+        :root {
+            --cherry-main: #9F1B32;
+            --cherry-light: #F8E8E8;
+            --cherry-accent: #D44D5C;
+            --soft-pink: #FFF9F9;
         }
-        /* Estilo para el panel lateral en móviles */
+        body { font-family: 'Montserrat', sans-serif; }
+        h1, .font-display { font-family: 'Playfair Display', serif; }
+        
+        #map { height: calc(100vh - 80px); width: 100%; z-index: 1; }
+        
+        /* Personalización de Leaflet */
+        .leaflet-container { background: #fdf6f6; }
+        .leaflet-bar a { background-color: white; color: var(--cherry-main); border-bottom: 1px solid var(--cherry-light); }
+        
+        /* Scrollbar estética */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--cherry-light); }
+        ::-webkit-scrollbar-thumb { background: var(--cherry-accent); border-radius: 10px; }
+
+        /* Animación suave para la aparición de datos */
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         @media (max-width: 768px) {
-            #sidebar {
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                width: 100%;
-                height: 40%;
-                z-index: 1000;
-                overflow-y: auto;
-            }
-            #map { height: 60vh; }
+            #sidebar { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; z-index: 1000; border-radius: 30px 30px 0 0; }
+            #map { height: 50vh; }
         }
     </style>
 </head>
-<body class="bg-gray-50 overflow-hidden">
+<body class="bg-[#FFF9F9] overflow-hidden text-gray-800">
 
-    <!-- Header / Navbar -->
-    <header class="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm relative z-10">
-        <div class="flex items-center space-x-3">
-            <div class="bg-blue-600 p-2 rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+    <!-- Header Elegante -->
+    <header class="h-20 bg-white border-b border-[#F2D5D5] flex items-center justify-between px-8 shadow-sm relative z-50">
+        <div class="flex items-center space-x-4">
+            <div class="bg-[#9F1B32] p-2.5 rounded-full shadow-lg shadow-red-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
             </div>
-            <h1 class="text-xl font-bold text-gray-800 tracking-tight">Tijuana <span class="text-blue-600">Rutas</span></h1>
+            <h1 class="text-2xl font-bold text-[#4A0E0E] italic">Mapa <span class="text-[#D44D5C] font-light not-italic">de Tijuana</span></h1>
         </div>
-        <div id="route-info" class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-500">
-            <div class="flex items-center"><span class="mr-2">📏</span> <span id="dist-val">0 km</span></div>
-            <div class="flex items-center"><span class="mr-2">⏱️</span> <span id="time-val">0 min</span></div>
+        
+        <div id="header-stats" class="hidden md:flex items-center space-x-6">
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] uppercase tracking-widest text-[#D44D5C] font-bold">Tiempo estimado</span>
+                <span id="time-val-header" class="text-lg font-display text-[#9F1B32]">0 min</span>
+            </div>
+            <div class="h-8 w-px bg-[#F2D5D5]"></div>
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] uppercase tracking-widest text-[#D44D5C] font-bold">Distancia</span>
+                <span id="dist-val-header" class="text-lg font-display text-[#9F1B32]">0 km</span>
+            </div>
         </div>
     </header>
 
     <main class="flex flex-col md:flex-row h-full">
-        <!-- Sidebar de Control -->
-        <aside id="sidebar" class="w-full md:w-80 bg-white border-r border-gray-200 p-6 flex flex-col space-y-6 shadow-xl z-20">
-            <div>
-                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Instrucciones</label>
-                <p class="text-sm text-gray-600">Haz clic derecho en el mapa para establecer el <b>Inicio</b> y <b>Destino</b>.</p>
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-full md:w-96 bg-white border-r border-[#F2D5D5] p-6 flex flex-col space-y-6 shadow-2xl z-20">
+            <div class="bg-[#FFF0F0] p-4 rounded-2xl border border-[#FCE4E4]">
+                <h2 class="text-[#9F1B32] font-bold text-sm mb-1 uppercase tracking-widest text-center">Planificador</h2>
+                <p class="text-xs text-[#7A5C5C] text-center italic">"Tu ruta ideal en la ciudad.."</p>
             </div>
 
-            <div class="space-y-4">
-                <div class="relative">
-                    <span class="absolute left-3 top-3 text-green-500">●</span>
-                    <input id="start-input" type="text" readonly placeholder="Punto de inicio..." 
-                           class="w-full pl-8 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+            <!-- Resumen de Tiempo (Nuevo Bloque Destacado) -->
+            <div id="time-card" class="hidden fade-in bg-[#9F1B32] p-5 rounded-3xl text-white shadow-xl shadow-red-100 flex items-center justify-between">
+                <div>
+                    <p class="text-xs opacity-80 font-medium uppercase tracking-tighter">Llegarás en aproximadamente</p>
+                    <p id="time-val-main" class="text-3xl font-display">-- min</p>
                 </div>
-                <div class="relative">
-                    <span class="absolute left-3 top-3 text-red-500">●</span>
-                    <input id="end-input" type="text" readonly placeholder="Punto de destino..." 
-                           class="w-full pl-8 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                <div class="bg-white/20 p-3 rounded-2xl">
+                    <span class="text-2xl">⏱️</span>
                 </div>
             </div>
 
-            <button id="clear-btn" class="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-sm transition-colors flex items-center justify-center">
-                Limpiar Mapa
+            <div class="space-y-3">
+                <!-- Punto Inicio -->
+                <div class="group relative flex items-center space-x-2">
+                    <div class="flex-1 relative">
+                        <span class="absolute left-3 top-3 text-[#D44D5C]">✿</span>
+                        <input id="start-input" type="text" readonly placeholder="Punto de partida..." 
+                               class="w-full pl-9 pr-4 py-3 bg-[#FDF8F8] border border-[#F2D5D5] rounded-2xl text-sm focus:outline-none transition-all placeholder:text-[#CBB2B2]">
+                    </div>
+                    <button id="del-start" class="hidden p-2 text-red-300 hover:text-[#9F1B32] transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+
+                <!-- Punto Fin -->
+                <div class="group relative flex items-center space-x-2">
+                    <div class="flex-1 relative">
+                        <span class="absolute left-3 top-3 text-[#9F1B32]">❤</span>
+                        <input id="end-input" type="text" readonly placeholder="Tu destino..." 
+                               class="w-full pl-9 pr-4 py-3 bg-[#FDF8F8] border border-[#F2D5D5] rounded-2xl text-sm focus:outline-none transition-all placeholder:text-[#CBB2B2]">
+                    </div>
+                    <button id="del-end" class="hidden p-2 text-red-300 hover:text-[#9F1B32] transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+            </div>
+
+            <button id="clear-btn" class="w-full py-3 bg-white hover:bg-[#FDF2F2] text-[#9F1B32] border border-[#9F1B32] font-semibold rounded-2xl text-sm transition-all shadow-sm">
+                Limpiar Todo
             </button>
 
-            <div id="instructions-container" class="flex-1 overflow-y-auto space-y-3 pt-4 border-t border-gray-100 hidden">
-                <h3 class="font-bold text-gray-800 text-sm">Pasos de la ruta:</h3>
-                <div id="steps-list" class="text-xs text-gray-600 space-y-2">
-                    <!-- Dinámico -->
+            <!-- Lista de Pasos -->
+            <div id="instructions-container" class="flex-1 overflow-y-auto space-y-4 pt-4 border-t border-[#F2D5D5] hidden">
+                <h3 class="font-bold text-[#4A0E0E] text-sm flex items-center">
+                    <span class="mr-2 text-lg">🌸</span> Guía de viaje detallada:
+                </h3>
+                <div id="steps-list" class="space-y-2">
+                    <!-- Contenido Dinámico -->
                 </div>
             </div>
         </aside>
 
-        <!-- Contenedor del Mapa -->
+        <!-- Mapa -->
         <section class="flex-1 relative">
             <div id="map"></div>
+            <!-- Badge flotante de distancia para móvil -->
+            <div id="mobile-dist" class="md:hidden absolute top-4 right-4 z-[1001] bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-[#F2D5D5] text-[#9F1B32] font-bold text-xs hidden">
+                📏 <span id="dist-mobile">0 km</span>
+            </div>
         </section>
     </main>
 
@@ -97,150 +149,147 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // Configuración Inicial de Tijuana
         const TJ_COORDS = [32.5149, -117.0382];
         let map, startMarker, endMarker, routeLayer;
 
         function initMap() {
-            // Inicializar el mapa centrado en Tijuana
-            map = L.map('map', {
-                zoomControl: false 
-            }).setView(TJ_COORDS, 12);
+            map = L.map('map', { zoomControl: false }).setView(TJ_COORDS, 13);
 
-            // Capa de Mapa (CartoDB Positron - Look Limpio y Moderno)
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CartoDB'
             }).addTo(map);
 
-            // Reposicionar controles de zoom
             L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-            // Evento Click Derecho para Context Menu Simple
-            map.on('contextmenu', (e) => {
-                handleMapClick(e.latlng);
+            map.on('click', (e) => {
+                handleMapInteraction(e.latlng);
             });
         }
 
-        function handleMapClick(latlng) {
+        function handleMapInteraction(latlng) {
             if (!startMarker) {
                 setStart(latlng);
             } else if (!endMarker) {
                 setEnd(latlng);
                 calculateRoute();
-            } else {
-                // Reiniciar si ya hay ambos
-                clearMap();
-                setStart(latlng);
             }
         }
 
         function setStart(latlng) {
             startMarker = L.marker(latlng, { 
-                draggable: true,
-                icon: createIcon('green')
+                icon: createIcon('crimson') 
             }).addTo(map);
             
-            document.getElementById('start-input').value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
-            
-            startMarker.on('dragend', () => {
-                document.getElementById('start-input').value = `${startMarker.getLatLng().lat.toFixed(4)}, ${startMarker.getLatLng().lng.toFixed(4)}`;
-                if (endMarker) calculateRoute();
-            });
+            document.getElementById('start-input').value = `Inicio: ${latlng.lat.toFixed(3)}, ${latlng.lng.toFixed(3)}`;
+            document.getElementById('del-start').classList.remove('hidden');
         }
 
         function setEnd(latlng) {
             endMarker = L.marker(latlng, { 
-                draggable: true,
-                icon: createIcon('red')
+                icon: createIcon('violet') 
             }).addTo(map);
             
-            document.getElementById('end-input').value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
-
-            endMarker.on('dragend', () => {
-                document.getElementById('end-input').value = `${endMarker.getLatLng().lat.toFixed(4)}, ${endMarker.getLatLng().lng.toFixed(4)}`;
-                calculateRoute();
-            });
+            document.getElementById('end-input').value = `Destino: ${latlng.lat.toFixed(3)}, ${latlng.lng.toFixed(3)}`;
+            document.getElementById('del-end').classList.remove('hidden');
         }
 
-        // Llamada a API de OSRM (Enrutamiento gratuito)
         async function calculateRoute() {
+            if (!startMarker || !endMarker) return;
+
             const start = startMarker.getLatLng();
             const end = endMarker.getLatLng();
-            
             const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true&languages=es`;
 
             try {
                 const response = await fetch(url);
                 const data = await response.json();
-
-                if (data.code !== 'Ok') return;
-
-                const route = data.routes[0];
-                drawRoute(route.geometry);
-                updateUI(route);
-            } catch (error) {
-                console.error("Error calculando ruta:", error);
-            }
+                if (data.code === 'Ok') {
+                    const route = data.routes[0];
+                    drawRoute(route.geometry);
+                    updateUI(route);
+                }
+            } catch (e) { console.error("Error en ruta", e); }
         }
 
         function drawRoute(geometry) {
             if (routeLayer) map.removeLayer(routeLayer);
-
             routeLayer = L.geoJSON(geometry, {
-                style: {
-                    color: '#3b82f6',
-                    weight: 6,
-                    opacity: 0.8,
-                    lineJoin: 'round'
-                }
+                style: { color: '#9F1B32', weight: 6, opacity: 0.8, lineCap: 'round' }
             }).addTo(map);
-
-            map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+            map.fitBounds(routeLayer.getBounds(), { padding: [60, 60] });
         }
 
         function updateUI(route) {
-            // Distancia y Tiempo
-            const km = (route.distance / 1000).toFixed(2);
-            const mins = Math.round(route.duration / 60);
+            const distanceKm = (route.distance / 1000).toFixed(1);
+            const durationMins = Math.round(route.duration / 60);
 
-            document.getElementById('dist-val').innerText = `${km} km`;
-            document.getElementById('time-val').innerText = `${mins} min`;
-            document.getElementById('route-info').classList.remove('hidden');
-
-            // Mostrar pasos
-            const list = document.getElementById('steps-list');
-            const container = document.getElementById('instructions-container');
-            list.innerHTML = '';
+            // Actualizar tiempo en todos los lugares
+            document.getElementById('time-val-main').innerText = `${durationMins} min`;
+            document.getElementById('time-val-header').innerText = `${durationMins} min`;
             
-            route.legs[0].steps.forEach((step, index) => {
-                const item = document.createElement('div');
-                item.className = 'p-2 bg-gray-50 rounded border-l-4 border-blue-400';
-                item.innerHTML = `<strong>${index + 1}.</strong> ${step.maneuver.instruction}`;
-                list.appendChild(item);
-            });
+            // Actualizar distancia
+            document.getElementById('dist-val-header').innerText = `${distanceKm} km`;
+            document.getElementById('dist-mobile').innerText = `${distanceKm} km`;
 
-            container.classList.remove('hidden');
+            // Mostrar contenedores
+            document.getElementById('header-stats').classList.remove('hidden');
+            document.getElementById('time-card').classList.remove('hidden');
+            document.getElementById('mobile-dist').classList.remove('hidden');
+
+            // Lista de pasos
+            const list = document.getElementById('steps-list');
+            list.innerHTML = '';
+            route.legs[0].steps.forEach((step, i) => {
+                if(step.maneuver.instruction.length < 5) return; // Filtrar pasos muy cortos/nulos
+                const div = document.createElement('div');
+                div.className = "text-[11px] p-3 bg-white border border-[#F2D5D5] rounded-xl text-[#4A0E0E] shadow-sm";
+                div.innerHTML = `<span class="font-bold text-[#D44D5C] mr-2">${i+1}.</span> ${step.maneuver.instruction}`;
+                list.appendChild(div);
+            });
+            document.getElementById('instructions-container').classList.remove('hidden');
         }
 
-        function clearMap() {
-            if (startMarker) map.removeLayer(startMarker);
-            if (endMarker) map.removeLayer(endMarker);
-            if (routeLayer) map.removeLayer(routeLayer);
-            
-            startMarker = null;
-            endMarker = null;
-            routeLayer = null;
+        function removeStart() {
+            if (startMarker) {
+                map.removeLayer(startMarker);
+                startMarker = null;
+                document.getElementById('start-input').value = '';
+                document.getElementById('del-start').classList.add('hidden');
+                resetRouteView();
+            }
+        }
 
-            document.getElementById('start-input').value = '';
-            document.getElementById('end-input').value = '';
-            document.getElementById('route-info').classList.add('hidden');
+        function removeEnd() {
+            if (endMarker) {
+                map.removeLayer(endMarker);
+                endMarker = null;
+                document.getElementById('end-input').value = '';
+                document.getElementById('del-end').classList.add('hidden');
+                resetRouteView();
+            }
+        }
+
+        function resetRouteView() {
+            if (routeLayer) map.removeLayer(routeLayer);
+            routeLayer = null;
+            document.getElementById('header-stats').classList.add('hidden');
+            document.getElementById('time-card').classList.add('hidden');
+            document.getElementById('mobile-dist').classList.add('hidden');
             document.getElementById('instructions-container').classList.add('hidden');
         }
 
-        // Helper para crear iconos de colores
+        function clearAll() {
+            removeStart();
+            removeEnd();
+        }
+
         function createIcon(color) {
+            const iconUrl = color === 'crimson' 
+                ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png'
+                : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png';
+            
             return new L.Icon({
-                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+                iconUrl: iconUrl,
                 shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
                 iconSize: [25, 41],
                 iconAnchor: [12, 41],
@@ -250,9 +299,10 @@
         }
 
         // Listeners
-        document.getElementById('clear-btn').addEventListener('click', clearMap);
+        document.getElementById('clear-btn').addEventListener('click', clearAll);
+        document.getElementById('del-start').addEventListener('click', (e) => { e.stopPropagation(); removeStart(); });
+        document.getElementById('del-end').addEventListener('click', (e) => { e.stopPropagation(); removeEnd(); });
 
-        // Iniciar al cargar
         window.onload = initMap;
     </script>
 </body>
