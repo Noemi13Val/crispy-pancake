@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Distancia - Tijuana</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --cherry-dark: #800020;
+            --cherry-bright: #D23158;
+        }
+        #map { height: 500px; width: 100%; border-radius: 1rem; }
+        .cherry-gradient { background: linear-gradient(135deg, #D23158 0%, #800020 100%); }
+    </style>
+</head>
+<body class="bg-[#FFF5F7] min-h-screen">
+
+    <nav class="cherry-gradient text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Tijuana <span class="font-light italic text-pink-200">Routes</span></h1>
+            <div class="flex gap-4">
+                <a href="/" class="hover:bg-white/10 px-4 py-2 rounded-lg transition-all">Trazar Ruta</a>
+                <a href="/distancia" class="bg-white/20 px-4 py-2 rounded-lg font-bold border border-white/40">Medir Distancia</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div class="lg:col-span-1 space-y-4">
+                <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-cherry-bright">
+                    <h2 class="text-xl font-semibold text-cherry-dark mb-4">Medidor Lineal</h2>
+                    <p class="text-sm text-gray-600 mb-4 text-pretty">Calcula la distancia exacta en kilómetros entre dos puntos (línea recta).</p>
+                    
+                    <div id="resultCard" class="hidden bg-pink-50 p-4 rounded-xl border border-pink-200 mb-4 animate-pulse">
+                        <span class="text-xs uppercase text-cherry-bright font-bold">Distancia calculada:</span>
+                        <div id="distanceResult" class="text-3xl font-black text-cherry-dark">0 km</div>
+                    </div>
+
+                    <button id="calcBtn" class="w-full py-3 bg-cherry-bright text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all">
+                        Calcular Distancia
+                    </button>
+                    <button onclick="location.reload()" class="w-full mt-2 py-2 text-sm text-gray-500 hover:text-cherry-dark underline">
+                        Reiniciar puntos
+                    </button>
+                </div>
+            </div>
+
+            <div class="lg:col-span-3">
+                <div id="map" class="shadow-xl border-4 border-white"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([32.5149, -117.0382], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+        let points = [];
+        let markers = [];
+        let polyline = null;
+
+        map.on('click', (e) => {
+            if (points.length < 2) {
+                points.push(e.latlng);
+                const marker = L.marker(e.latlng).addTo(map);
+                markers.push(marker);
+
+                if (points.length === 2) {
+                    // Dibujar línea visual
+                    polyline = L.polyline(points, {color: '#D23158', dashArray: '10, 10'}).addTo(map);
+                }
+            }
+        });
+
+        // Fórmula de Haversine para distancia geodésica
+        function getDistance(p1, p2) {
+            const R = 6371; // Radio de la Tierra en km
+            const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+            const dLon = (p2.lng - p1.lng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        document.getElementById('calcBtn').addEventListener('click', () => {
+            if (points.length === 2) {
+                const dist = getDistance(points[0], points[1]);
+                const resultDiv = document.getElementById('resultCard');
+                const textDiv = document.getElementById('distanceResult');
+                
+                resultDiv.classList.remove('hidden');
+                textDiv.innerText = dist.toFixed(2) + " km";
+                
+                // Zoom para ajustar ambos puntos
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.2));
+            } else {
+                alert("Por favor selecciona 2 puntos en el mapa primero.");
+            }
+        });
+    </script>
+</body>
+</html>
