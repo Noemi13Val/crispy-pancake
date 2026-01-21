@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tijuana Route Planner</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        #map { height: calc(100vh - 80px); width: 100%; z-index: 1; }
+        .custom-popup .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            padding: 5px;
+        }
+        /* Estilo para el panel lateral en móviles */
+        @media (max-width: 768px) {
+            #sidebar {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 40%;
+                z-index: 1000;
+                overflow-y: auto;
+            }
+            #map { height: 60vh; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 overflow-hidden">
+
+    <!-- Header / Navbar -->
+    <header class="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm relative z-10">
+        <div class="flex items-center space-x-3">
+            <div class="bg-blue-600 p-2 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold text-gray-800 tracking-tight">Tijuana <span class="text-blue-600">Rutas</span></h1>
+        </div>
+        <div id="route-info" class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-500">
+            <div class="flex items-center"><span class="mr-2">📏</span> <span id="dist-val">0 km</span></div>
+            <div class="flex items-center"><span class="mr-2">⏱️</span> <span id="time-val">0 min</span></div>
+        </div>
+    </header>
+
+    <main class="flex flex-col md:flex-row h-full">
+        <!-- Sidebar de Control -->
+        <aside id="sidebar" class="w-full md:w-80 bg-white border-r border-gray-200 p-6 flex flex-col space-y-6 shadow-xl z-20">
+            <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Instrucciones</label>
+                <p class="text-sm text-gray-600">Haz clic derecho en el mapa para establecer el <b>Inicio</b> y <b>Destino</b>.</p>
+            </div>
+
+            <div class="space-y-4">
+                <div class="relative">
+                    <span class="absolute left-3 top-3 text-green-500">●</span>
+                    <input id="start-input" type="text" readonly placeholder="Punto de inicio..." 
+                           class="w-full pl-8 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                </div>
+                <div class="relative">
+                    <span class="absolute left-3 top-3 text-red-500">●</span>
+                    <input id="end-input" type="text" readonly placeholder="Punto de destino..." 
+                           class="w-full pl-8 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                </div>
+            </div>
+
+            <button id="clear-btn" class="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-sm transition-colors flex items-center justify-center">
+                Limpiar Mapa
+            </button>
+
+            <div id="instructions-container" class="flex-1 overflow-y-auto space-y-3 pt-4 border-t border-gray-100 hidden">
+                <h3 class="font-bold text-gray-800 text-sm">Pasos de la ruta:</h3>
+                <div id="steps-list" class="text-xs text-gray-600 space-y-2">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Contenedor del Mapa -->
+        <section class="flex-1 relative">
+            <div id="map"></div>
+        </section>
+    </main>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Configuración Inicial de Tijuana
+        const TJ_COORDS = [32.5149, -117.0382];
+        let map, startMarker, endMarker, routeLayer;
+
+        function initMap() {
+            // Inicializar el mapa centrado en Tijuana
+            map = L.map('map', {
+                zoomControl: false 
+            }).setView(TJ_COORDS, 12);
+
+            // Capa de Mapa (CartoDB Positron - Look Limpio y Moderno)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            }).addTo(map);
+
+            // Reposicionar controles de zoom
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            // Evento Click Derecho para Context Menu Simple
+            map.on('contextmenu', (e) => {
+                handleMapClick(e.latlng);
+            });
+        }
+
+        function handleMapClick(latlng) {
+            if (!startMarker) {
+                setStart(latlng);
+            } else if (!endMarker) {
+                setEnd(latlng);
+                calculateRoute();
+            } else {
+                // Reiniciar si ya hay ambos
+                clearMap();
+                setStart(latlng);
+            }
+        }
+
+        function setStart(latlng) {
+            startMarker = L.marker(latlng, { 
+                draggable: true,
+                icon: createIcon('green')
+            }).addTo(map);
+            
+            document.getElementById('start-input').value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
+            
+            startMarker.on('dragend', () => {
+                document.getElementById('start-input').value = `${startMarker.getLatLng().lat.toFixed(4)}, ${startMarker.getLatLng().lng.toFixed(4)}`;
+                if (endMarker) calculateRoute();
+            });
+        }
+
+        function setEnd(latlng) {
+            endMarker = L.marker(latlng, { 
+                draggable: true,
+                icon: createIcon('red')
+            }).addTo(map);
+            
+            document.getElementById('end-input').value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
+
+            endMarker.on('dragend', () => {
+                document.getElementById('end-input').value = `${endMarker.getLatLng().lat.toFixed(4)}, ${endMarker.getLatLng().lng.toFixed(4)}`;
+                calculateRoute();
+            });
+        }
+
+        // Llamada a API de OSRM (Enrutamiento gratuito)
+        async function calculateRoute() {
+            const start = startMarker.getLatLng();
+            const end = endMarker.getLatLng();
+            
+            const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true&languages=es`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.code !== 'Ok') return;
+
+                const route = data.routes[0];
+                drawRoute(route.geometry);
+                updateUI(route);
+            } catch (error) {
+                console.error("Error calculando ruta:", error);
+            }
+        }
+
+        function drawRoute(geometry) {
+            if (routeLayer) map.removeLayer(routeLayer);
+
+            routeLayer = L.geoJSON(geometry, {
+                style: {
+                    color: '#3b82f6',
+                    weight: 6,
+                    opacity: 0.8,
+                    lineJoin: 'round'
+                }
+            }).addTo(map);
+
+            map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+        }
+
+        function updateUI(route) {
+            // Distancia y Tiempo
+            const km = (route.distance / 1000).toFixed(2);
+            const mins = Math.round(route.duration / 60);
+
+            document.getElementById('dist-val').innerText = `${km} km`;
+            document.getElementById('time-val').innerText = `${mins} min`;
+            document.getElementById('route-info').classList.remove('hidden');
+
+            // Mostrar pasos
+            const list = document.getElementById('steps-list');
+            const container = document.getElementById('instructions-container');
+            list.innerHTML = '';
+            
+            route.legs[0].steps.forEach((step, index) => {
+                const item = document.createElement('div');
+                item.className = 'p-2 bg-gray-50 rounded border-l-4 border-blue-400';
+                item.innerHTML = `<strong>${index + 1}.</strong> ${step.maneuver.instruction}`;
+                list.appendChild(item);
+            });
+
+            container.classList.remove('hidden');
+        }
+
+        function clearMap() {
+            if (startMarker) map.removeLayer(startMarker);
+            if (endMarker) map.removeLayer(endMarker);
+            if (routeLayer) map.removeLayer(routeLayer);
+            
+            startMarker = null;
+            endMarker = null;
+            routeLayer = null;
+
+            document.getElementById('start-input').value = '';
+            document.getElementById('end-input').value = '';
+            document.getElementById('route-info').classList.add('hidden');
+            document.getElementById('instructions-container').classList.add('hidden');
+        }
+
+        // Helper para crear iconos de colores
+        function createIcon(color) {
+            return new L.Icon({
+                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+        }
+
+        // Listeners
+        document.getElementById('clear-btn').addEventListener('click', clearMap);
+
+        // Iniciar al cargar
+        window.onload = initMap;
+    </script>
+</body>
+</html>
